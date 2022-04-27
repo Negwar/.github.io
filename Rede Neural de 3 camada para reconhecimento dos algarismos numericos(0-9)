@@ -1,0 +1,206 @@
+# REDE NEURAL DE 3 CAMADAS
+# A PARTIR DA IMAGEM DE UM NÚMERO, PERGUNTA A REDE NEURAL QUAL É O NÚMERO DESENHADO NESSA IMAGEM
+import numpy
+#scipy.special para a função sigmoide expit()
+import scipy.special
+import matplotlib.pyplot
+%matplotlib inline
+# biblioteca para carregar arquivos de imagens png
+import imageio
+# biblioteca que ajuda a selecionar multiplos arquivos usando padrões
+import glob
+#Definição da classe da Rede Neural
+class neuralNetwork:
+    
+    #iniciando a rede neural
+    def __init__(self, inputnodes, hiddennodes, outputnodes, learningrate):
+        #definir o numero de nodes em cada camada input(entrada), hidden(oculta), output(saída)
+        self.inodes = inputnodes
+        self.hnodes = hiddennodes
+        self.onodes = outputnodes
+        
+        #matriz dos pesos, wih(pesos input-hidden) e who(pesos hidden-output)
+        #os pesos dentro dos arrays são w_i_j, onde o elo do nó i para o nó j na próxima camada
+        #w11 w21
+        #w12 w22 etc
+        #usando a função numpy.random.normal usa-se da distribuição normal para nivelar a distribuição dos valores com centro 0.0
+        #https://docs.scipy.org/doc/numpy-1.10.1/reference/generated/numpy.random.normal.html
+        self.wih = (numpy.random.normal(0.0, pow(self.hnodes, -0.5), (self.hnodes, self.inodes)))
+        self.who = (numpy.random.normal(0.0, pow(self.onodes, -0.5), (self.onodes, self.hnodes)))
+        
+        #taxa de aprendizagem
+        self.lr = learningrate
+        
+        #função de ativação é a função sigmoide
+        self.activation_function = lambda x: scipy.special.expit(x)
+    pass
+
+    #treinando a rede neural
+    def train(self, inputs_list, targets_list):
+        #converte a lista de entrada e a lista dos valores desejados para um array 2D
+        inputs = numpy.array(inputs_list, ndmin=2).T
+        targets = numpy.array(targets_list, ndmin=2).T
+        
+        #calculo dos sinais da camada oculta
+        hidden_inputs = numpy.dot(self.wih, inputs)
+        #calculo dos sinais emergentes da camada oculta
+        hidden_outputs = self.activation_function(hidden_inputs)
+        
+        #calculo dos sinais da camada de saída
+        final_inputs = numpy.dot(self.who, hidden_outputs)
+        #calculo dos sinais emergentes da camada de saída
+        final_outputs = self.activation_function(final_inputs)
+        
+        #error é (valor desejado - valor atual)
+        output_errors = targets - final_outputs
+        #O error da camada oculta(hidden_errors) é o output_errors, dividido pelos pesos, recombinados nos nós da camada oculta
+        hidden_errors = numpy.dot(self.who.T, output_errors)
+        
+        #atualizando os pesos entre a camada oculta e a de saída
+        self.who += self.lr * numpy.dot((output_errors * final_outputs *(1.0 - final_outputs)), numpy.transpose(hidden_outputs))
+        #atualizando os pesos entre a camada de entrada e a oculta
+        self.wih += self.lr * numpy.dot((hidden_errors * hidden_outputs *(1.0 - hidden_outputs)), numpy.transpose(inputs))     
+    pass
+
+    #consultando a rede neural(analisar a resposta do node output depois de ter recebido o input)
+    def querry(self, inputs_list):
+        #converte a lista de entrada para um array de 2d
+        inputs = numpy.array(inputs_list, ndmin=2).T
+        
+        #X_hidden = W_input_hidden * I - numpy.dot(função que multiplica matrizes)
+        #calculo dos sinais que vão para a camada oculta
+        hidden_inputs = numpy.dot(self.wih, inputs)
+        #calculo dos sinais saindo da camada oculta
+        hidden_outputs = self.activation_function(hidden_inputs)
+        
+        #calculo dos sinais que vão para a camada de saida
+        final_inputs = numpy.dot(self.who, hidden_outputs)
+        #calculo dos sinais que saem da camada de saída
+        final_outputs = self.activation_function(final_inputs)
+        
+        return final_outputs
+# numeros de nós da camada de entrada, da camada oculta e da camada de saída
+input_nodes = 784
+hidden_nodes = 200
+output_nodes = 10
+
+# taxa de aprendizagem
+learning_rate = 0.1
+
+# criando uma instancia de uma rede neural
+n = neuralNetwork(input_nodes,hidden_nodes,output_nodes,learning_rate)
+#carregando os dados de treino
+training_data_file = open(r"C:\Users\Wagner\Documents\Mnist_dataset\mnist_train.csv", 'r')
+training_data_list = training_data_file.readlines()
+training_data_file.close()
+#Treino da rede neural
+
+#epoch(periodo) será a quantidade de vezes que os dados de treino serão usados para treino
+epochs=5
+for e in range(epochs):
+    #percorrendo todos os registros do conjunto de dados do treino
+    for record in training_data_list:
+        #separando os valores pela ','
+        all_values = record.split(',')
+        #transformação dos valores das cores entre(0-255) para (0.01-1)
+        #pq os valores de entrada n podem ser 0, e n prejudicar os valores dos pesos
+        inputs = (numpy.asfarray(all_values[1:]) / 255.0 * 0.99) + 0.01
+        #criando os valores de saída ideais (todos 0.01, exceto o rótulo desejado q é 0.99)
+        targets = numpy.zeros(output_nodes) + 0.01
+        #all_values[0] é o rótulo desejado para esse registro
+        targets[int(all_values[0])] = 0.99
+        n.train(inputs, targets)
+        pass
+    pass
+#Carregando os dados de teste
+test_data_file = open(r"C:\Users\Wagner\Documents\Mnist_dataset\mnist_test.csv", 'r')
+test_data_list = test_data_file.readlines()
+test_data_file.close()
+# Testando a rede neural
+
+# Tabela de desempenho/cartão de pontuação de quão bem a rede neural está funcionando, é iniciada vazia
+scorecard = []
+
+#percorrendo todos os registros do conjunto de dados de teste
+for record in test_data_list:
+    #separando os valores pela ','
+    all_values = record.split(',')
+    #corrigindo a resposta do primeiro valor
+    correct_label = int(all_values[0])
+    #print(correct_label, "rótulo correto")
+    #transformação dos valores das cores entre(0-255) para (0.01-1)
+    #pq os valores de entrada n podem ser 0, e n prejudicar os valores dos pesos
+    inputs = (numpy.asfarray(all_values[1:]) / 255.0 * 0.99) + 0.01
+    
+    #consultando a rede
+    outputs = n.querry(inputs)
+    #o indice de maior valor corresponde ao rótulo(numero desejado)
+    label = numpy.argmax(outputs)
+    #print(label, "Resposta da RNA")
+    
+    if(label==correct_label):
+        #se a resposta da rede neural combinar com a resposta certa, adiciona 1 ao scorecard
+        scorecard.append(1)
+    else:
+        #se a rede neural não combinar com a resposta certa, não se adiciona ao scorecard
+        scorecard.append(0)
+        pass
+    pass
+#Calculo da tabela de desempenho, em fração
+scorecard_array = numpy.asarray(scorecard)
+print("Performance = ", scorecard_array.sum()/ scorecard_array.size)
+
+# nossa próprio conjunto de imagens para test
+our_own_dataset = []
+
+# carregando a imagem png para o conjunto de test
+for image_file_name in glob.glob(r"C:\Users\Wagner\Documents\Mnist_dataset\num?.png"):
+    
+    # use o nome do arquivo para setar o rotulo certo 
+    label = int(image_file_name[-5:-4])
+    print(label)
+    
+    # carregar os dados do arquivo png em um array
+    print("loading ... ", image_file_name)
+    img_array = imageio.imread(image_file_name, as_gray=True)
+    
+    # reajustar o tamanho da iamgem 28x28 da lista para 784 valores, valores invertidos
+    img_data  = 255.0 - img_array.reshape(784)
+    
+    # então transformar o alcance dos valores para 0.01 á 1
+    img_data = (img_data / 255.0 * 0.99) + 0.01
+    print(numpy.min(img_data))
+    print(numpy.max(img_data))
+    
+    # inserir o rótulo e os dados da iamgem para o conjunto de teste
+    record = numpy.append(label,img_data)
+    our_own_dataset.append(record)
+    #print(our_own_dataset)
+    
+    pass
+
+# testando a rede neural com as nossas próprias imagens
+# registro de teste
+item = 3
+
+# plotando a imagem
+matplotlib.pyplot.imshow(our_own_dataset[item][1:].reshape(28,28), cmap='Greys', interpolation='None')
+
+# resposta certa é o primeiro valor
+correct_label = our_own_dataset[item][0]
+# os dados da imagem são os valores restantes
+inputs = our_own_dataset[item][1:]
+
+# consultando a rede neural
+outputs = n.querry(inputs)
+print (outputs)
+
+# o indice de maor valor corresponde ao rótulo
+label = numpy.argmax(outputs)
+print("network says ", label)
+# inserindo correto ou incorreto a lista
+if (label == correct_label):
+    print ("match!")
+else:
+    print ("no match!")
+    pass
